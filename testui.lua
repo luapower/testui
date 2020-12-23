@@ -381,6 +381,7 @@ if not ... then
 
 	end
 
+	testui:init()
 	testui:run()
 
 end
