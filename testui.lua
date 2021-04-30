@@ -302,10 +302,18 @@ function testui:init()
 	testui.window = win
 	win.testui = testui
 
+	function win:keydown(key)
+		self.testui.key = key
+		self:invalidate()
+	end
+
 	function win:keyup(key)
-		if key == 'esc' then
+		self.testui.key = nil
+		self:invalidate()
+		if key == 'esc' and not self.testui.key_captured then
 			self:close()
 		end
+		self.testui.key_captured = false
 	end
 
 	function win:mousedown(button)
