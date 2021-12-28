@@ -1,34 +1,38 @@
 --[[
+
 	Minimal IMGUI for creating interactive tests for UI libraries.
 	Written by Cosmin Apreutesei. Public Domain.
+
 	This API is designed for stability so it is necessarily small and not very
 	customizable. If you change this API, text/fix the test UIs that use it.
+
 	DRAWING
 		:setcolor(c)
 		:text_w(s, bold)
-		:text('left|center|right', 'top|bottom|center, x, y, w, h, bold, color)
+		:text(s, ['left|center|right'], ['top|bottom|center'], x, y, w, h, [bold], [color])
 		:box(x, y, w, h, [bg_color], [border_color])
 	LAYOUTING
 		:reset()
-		:rect(w, h)
+		:rect(w, h) -> x, y, w, h
 		:pushgroup(['down|right'], [minmax])
 		:popgroup([margin])
 		:nextgroup([margin])
-		.min_w, .min_h, .margin_h, .margin_w
+		.min_w, .min_h, .max_w, .max_h, .margin_h, .margin_w
 	INPUT
 		:hit(x, y, w, h) -> t|f
 		:activate(id, x, y, w, h) -> t|f
 	WIDGETS
 		:heading(s)
 		:label(s)
-		:button(id, [label], [selected]) -> activated
-		:choose(id, options, v, [opt_name]) -> v1
-		:slide(id, [label], v, min, max, [step], [default]) -> v
+		:button(id[, label], [selected]) -> activated, selected1
+		:choose(id, options, v, [opt_name]) -> activated_option, v1
+		:slide(id[, label], v, min, max, [step], [default]) -> activated_v1, v1
 		:image(bitmap)
 	TEST WINDOW
 		:repaint()
 		:init()
 		:run()
+
 ]]
 
 local nw = require'nw'
@@ -227,7 +231,9 @@ function testui:label(s)
 end
 
 function testui:button(id, label, selected)
-	label = label or id
+	if type(label) ~= 'string' then
+		label, selected = id, label
+	end
 	local cr = self.cr
 	local w = self:text_w(label)
 	local x, y, w, h = self:rect(w + 10, 0)
@@ -236,7 +242,9 @@ function testui:button(id, label, selected)
 	self:text(label, nil, nil, x, y, w, h)
 	if activated then
 		self.window:invalidate()
-		return true
+		return true, not selected
+	else
+		return nil, selected
 	end
 end
 
@@ -251,7 +259,8 @@ function testui:choose(id, options, v, option_name)
 	local cr = self.cr
 	self:pushgroup(self.dir)
 	self.margin_w, self.margin_h = 0, 0
-	local option
+	local activated_option
+	local v1 = v
 	for i,k in ipairs(options) do
 		local sel
 		if type(v) == 'table' then --multiple choice
@@ -259,21 +268,31 @@ function testui:choose(id, options, v, option_name)
 		else
 			sel = k == v
 		end
-		local active = self:button(id..'.'..k, option_name(k), sel)
-		if active then
-			option = k
+		local activated, sel = self:button(id..'.'..k, option_name(k), sel)
+		if activated then
+			activated_option = k
+			if type(v) == 'table' then --multiple choice
+				v1 = glue.update({}, v)
+				v1[k] = sel
+			else
+				v1 = sel and k or nil
+			end
 		end
 	end
 	self:popgroup()
-	return option
+	return activated_option, v1
 end
 
 function testui:slide(id, label, v, min, max, step, default)
+	if type(label) ~= 'string' then
+		label, v, min, max, step, default = id, label, v, min, max, step
+	end
 	v = glue.clamp(v or min, min, max)
 	step = step or (max - min) / 100
 	local cr = self.cr
 	local s1 = label or id
-	local fmt = '%.0'..floor(math.log10(1/step))..'f'
+	local d = floor(math.log10(1/step))
+	local fmt = d == 1 and '%d' or '%.0'..d..'f'
 	local s2 = string.format(fmt, glue.snap(v, step))
 	local w1 = self:text_w(s1)
 	local w2 = math.max(40, self:text_w(s2))
@@ -282,10 +301,10 @@ function testui:slide(id, label, v, min, max, step, default)
 	local pw = glue.lerp(v, min, max, 0, w)
 	self:box(x, y, w, h, '#00', '#22')
 	self:box(x, y, pw, h, hit and '#33' or '#22')
-	self:text(s1, 'left' , nil, x+5, y, w - w2 - 14, h)
+	self:text(s1, 'left' , nil, x+5, y, w - w2, h)
 	self:text(s2, 'right', nil, x-5, y, w, h)
-	local v1 = v
 	if active then
+		local v1
 		if self.active_button == 'right' then
 			--pressing the right button resets the value to the default, if any.
 			if default ~= nil then
@@ -298,8 +317,10 @@ function testui:slide(id, label, v, min, max, step, default)
 		if v1 ~= v then
 			self.window:invalidate()
 		end
+		return v1, v1
+	else
+		return nil, v
 	end
-	return v1
 end
 
 function testui:image(src, scale) --draw scaled RGBA8888 and G8 images
@@ -399,6 +420,7 @@ function testui:init()
 	end
 
 	function win:repaint()
+		testui.cw, testui.cw = self:client_size()
 		testui.clock = time.clock()
 		local cr = self:bitmap():cairo()
 		cr:new_path()
@@ -425,6 +447,9 @@ function testui:init()
 end
 
 function testui:run()
+	if not self.app then
+		self:init()
+	end
 	self.window:show()
 	self.app:run()
 end
@@ -451,7 +476,6 @@ if not ... then
 
 	end
 
-	testui:init()
 	testui:run()
 
 end
