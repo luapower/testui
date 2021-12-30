@@ -11,6 +11,7 @@
 		:text_w(s, bold)
 		:text(s, ['left|center|right'], ['top|bottom|center'], x, y, w, h, [bold], [color])
 		:box(x, y, w, h, [bg_color], [border_color])
+		:checkerboard([square_size])
 	LAYOUTING
 		:reset()
 		:rect(w, h) -> x, y, w, h
