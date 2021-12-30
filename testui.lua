@@ -273,9 +273,9 @@ function testui:choose(id, options, v, option_name)
 			activated_option = k
 			if type(v) == 'table' then --multiple choice
 				v1 = glue.update({}, v)
-				v1[k] = sel
+				v1[k] = sel or nil
 			else
-				v1 = sel and k or nil
+				v1 = k
 			end
 		end
 	end
@@ -357,6 +357,20 @@ function testui:image(src, scale) --draw scaled RGBA8888 and G8 images
 	surface:free()
 end
 
+function testui:checkerboard(sz)
+	local cr = self.cr
+	local w = self.cw
+	local h = self.ch
+	sz = sz or 30
+	for y=0,h/sz do
+		for x=0,w/sz do
+			cr:rectangle(x * sz, y * sz, sz, sz)
+			cr:rgba(.5, .5, .5, 0.2 * ((x + y % 2) % 2))
+			cr:fill()
+		end
+	end
+end
+
 --test window ----------------------------------------------------------------
 
 function testui:repaint() end --stub
@@ -419,8 +433,9 @@ function testui:init()
 		self:invalidate()
 	end
 
+	local err0
 	function win:repaint()
-		testui.cw, testui.cw = self:client_size()
+		testui.cw, testui.ch = self:client_size()
 		testui.clock = time.clock()
 		local cr = self:bitmap():cairo()
 		cr:new_path()
@@ -433,7 +448,11 @@ function testui:init()
 		cr:paint()
 		self.testui.win_w, self.testui.win_h = self:client_size()
 		self.testui:reset()
-		self.testui:repaint()
+		local ok, err = glue.pcall(self.testui.repaint, self.testui)
+		if not ok and err ~= err0 then
+			print(err)
+			err0 = err
+		end
 		cr:restore()
 		if cr:status() ~= 0 then
 			print(cr:status_message())
